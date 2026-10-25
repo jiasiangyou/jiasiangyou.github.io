@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="點讀圖鑑">
+<meta name="theme-color" content="#ff8a5c">
+<title>手指點讀圖鑑</title>
+<style>
+  :root {
+    --bg: #fff6ec;
+    --ink: #3a2e2a;
+    --muted: #8a7a72;
+    --card: #ffffff;
+    --accent: #ff8a5c;
+    --accent-2: #4fb3e8;
+    --good: #43b96b;
+    --bad: #f05a5a;
+    --shadow: 0 6px 0 rgba(58, 46, 42, .12);
+    --radius: 24px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+    overscroll-behavior: none;
+    overflow: hidden;
+    touch-action: manipulation;
+  }
+  button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+  .screen { position: fixed; inset: 0; display: none; flex-direction: column;
+    padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+  .screen.active { display: flex; }
+
+  /* ---------- top bar ---------- */
+  .topbar { display: flex; align-items: center; gap: 12px; min-height: 64px; }
+  .topbar h1 { font-size: clamp(22px, 3.2vw, 34px); margin: 0; flex: 1; text-align: center; }
+  .icon-btn { width: 64px; height: 64px; border-radius: 50%; background: var(--card); box-shadow: var(--shadow);
+    font-size: 30px; display: grid; place-items: center; flex: none; }
+  .icon-btn:active { transform: translateY(3px); box-shadow: 0 3px 0 rgba(58,46,42,.12); }
+  .seg { display: flex; background: var(--card); border-radius: 999px; padding: 6px; box-shadow: var(--shadow); flex: none; }
+  .seg button { padding: 10px 16px; border-radius: 999px; font-weight: 700; font-size: 18px; color: var(--muted); }
+  .seg button.on { background: var(--accent); color: #fff; }
+
+  /* ---------- home: age picker ---------- */
+  .hero { text-align: center; margin: 2vh 0 3vh; }
+  .hero .title { font-size: clamp(34px, 6vw, 64px); font-weight: 900; letter-spacing: 2px; }
+  .hero .sub { color: var(--muted); font-size: clamp(16px, 2.2vw, 22px); margin-top: 8px; }
+  .ages { flex: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 24px; align-content: center; max-width: 1100px; width: 100%; margin: 0 auto; }
+  .age-card { border-radius: 32px; padding: 32px 20px; box-shadow: var(--shadow); color: #fff; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .age-card:active { transform: scale(.97); }
+  .age-card .emo { font-size: clamp(64px, 10vw, 110px); line-height: 1; }
+  .age-card .age { font-size: clamp(28px, 4vw, 40px); font-weight: 900; }
+  .age-card .desc { font-size: 17px; opacity: .95; line-height: 1.5; }
+
+  /* ---------- book shelf ---------- */
+  .shelf { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 24px; padding: 24px 4px; align-content: start; }
+  .book { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; text-align: left; }
+  .book:active { transform: scale(.97); }
+  .book .cover { height: 150px; display: grid; place-items: center; font-size: 80px; }
+  .book .meta { padding: 14px 18px 18px; }
+  .book .name { font-size: 24px; font-weight: 800; }
+  .book .count { color: var(--muted); font-size: 15px; margin-top: 4px; }
+
+  /* ---------- reader ---------- */
+  .mode-bar { display: flex; justify-content: center; gap: 12px; margin: 8px 0; flex-wrap: wrap; }
+  .stage-wrap { flex: 1; display: grid; place-items: center; min-height: 0; }
+  .stage { position: relative; container-type: size; width: min(100%, calc((100dvh - 250px) * 4 / 3)); aspect-ratio: 4 / 3; border-radius: 32px; overflow: hidden; box-shadow: var(--shadow); }
+  #reader.quiz .stage { width: min(100%, calc((100dvh - 320px) * 4 / 3)); }
+  .stage.grid { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr); gap: 3%; padding: 4%; }
+  .hot { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; touch-action: manipulation; }
+  .stage.grid .hot { position: relative; transform: none; left: auto !important; top: auto !important; background: rgba(255,255,255,.85); border-radius: 28px; justify-content: center; }
+  .hot .emo { line-height: 1; filter: drop-shadow(0 4px 0 rgba(0,0,0,.12)); transition: transform .15s; }
+  .hot .tag { margin-top: 4px; background: rgba(255,255,255,.92); border-radius: 999px; padding: 2px 12px; font-weight: 800; font-size: clamp(14px, 1.8vw, 20px); white-space: nowrap; box-shadow: 0 2px 0 rgba(0,0,0,.1); }
+  .hot .tag .en { color: var(--accent-2); font-weight: 700; margin-left: 6px; }
+  .stage.hide-tags .hot .tag { visibility: hidden; }
+  .hot.pop .emo { animation: pop .45s ease; }
+  .hot.wrong .emo { animation: shake .4s ease; }
+  .hot.right .emo { animation: pop .6s ease; }
+  @keyframes pop { 0%{transform:scale(1)} 40%{transform:scale(1.35) rotate(-6deg)} 70%{transform:scale(.92)} 100%{transform:scale(1)} }
+  @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-10px)} 75%{transform:translateX(10px)} }
+
+  .bubble { position: absolute; left: 50%; top: 3%; transform: translateX(-50%); background: #fff; border-radius: 20px; padding: 12px 22px;
+    font-size: clamp(16px, 2.2vw, 24px); font-weight: 700; box-shadow: 0 6px 18px rgba(0,0,0,.15); max-width: 88%; text-align: center; pointer-events: none;
+    opacity: 0; transition: opacity .2s; z-index: 5; }
+  .bubble.show { opacity: 1; }
+  .bubble .en { display: block; color: var(--accent-2); font-size: .8em; margin-top: 2px; }
+
+  .quiz-bar { display: none; align-items: center; justify-content: center; gap: 12px; background: var(--card); border-radius: 999px; padding: 8px 8px 8px 24px;
+    box-shadow: var(--shadow); margin: 0 auto 10px; font-size: clamp(18px, 2.4vw, 26px); font-weight: 800; max-width: 100%; }
+  .quiz-bar.show { display: flex; }
+  .quiz-bar .stars { color: #f5b301; font-size: .9em; white-space: nowrap; }
+  .quiz-bar .icon-btn { width: 52px; height: 52px; font-size: 24px; box-shadow: none; background: var(--bg); }
+
+  .pager { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+  .pager .dots { display: flex; gap: 10px; }
+  .pager .dot { width: 14px; height: 14px; border-radius: 50%; background: #e6d8cc; }
+  .pager .dot.on { background: var(--accent); }
+  .pager .icon-btn[disabled] { opacity: .3; }
+
+  .confetti { position: fixed; pointer-events: none; font-size: 34px; z-index: 50; animation: fly 1.1s ease-out forwards; }
+  @keyframes fly { to { transform: translate(var(--dx), var(--dy)) rotate(var(--r)); opacity: 0; } }
+
+  /* parent lock hint */
+  .hold-ring { position: relative; }
+  .hold-ring::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 4px solid var(--accent); clip-path: inset(0 100% 0 0); }
+  .hold-ring.holding::after { animation: fill 1.2s linear forwards; }
+  @keyframes fill { to { clip-path: inset(0 0 0 0); } }
+
+  .sheet { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; place-items: center; z-index: 40; padding: 16px; }
+  .sheet.show { display: grid; }
+  .sheet .panel { background: var(--card); border-radius: 28px; padding: 28px; width: min(520px, 100%); }
+  .sheet h2 { margin: 0 0 16px; }
+  .sheet .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #f0e6dc; font-size: 18px; flex-wrap: wrap; }
+  .sheet .close { margin-top: 20px; width: 100%; padding: 16px; border-radius: 16px; background: var(--accent); color: #fff; font-weight: 800; font-size: 20px; }
+  .toast { position: fixed; left: 50%; top: 20px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 999px; font-size: 16px; opacity: 0; transition: opacity .3s; z-index: 60; pointer-events: none; }
+  .toast.show { opacity: .92; }
+</style>
+</head>
+<body>
+
+<!-- 1. 選年齡 -->
+<section class="screen active" id="home">
+  <div class="topbar">
+    <span style="width:64px"></span>
+    <h1></h1>
+    <button class="icon-btn hold-ring" id="btnSettings" aria-label="家長設定（長按）">⚙️</button>
+  </div>
+  <div class="hero">
+    <div class="title">手指點讀圖鑑</div>
+    <div class="sub">請選擇小朋友的年齡</div>
+  </div>
+  <div class="ages" id="ages"></div>
+</section>
+
+<!-- 2. 選主題書 -->
+<section class="screen" id="shelfScreen">
+  <div class="topbar">
+    <button class="icon-btn" data-back="home" aria-label="返回">⬅️</button>
+    <h1 id="shelfTitle"></h1>
+    <span style="width:64px"></span>
+  </div>
+  <div class="shelf" id="shelf"></div>
+</section>
+
+<!-- 3. 點讀頁 -->
+<section class="screen" id="reader">
+  <div class="topbar">
+    <button class="icon-btn" data-back="shelfScreen" aria-label="返回">⬅️</button>
+    <h1 id="pageTitle"></h1>
+    <div class="seg" id="langSeg">
+      <button data-lang="zh">中</button>
+      <button data-lang="both">中英</button>
+      <button data-lang="en">EN</button>
+    </div>
+  </div>
+  <div class="mode-bar">
+    <div class="seg" id="modeSeg">
+      <button data-mode="read">👆 點讀</button>
+      <button data-mode="quiz">❓ 問答</button>
+    </div>
+  </div>
+  <div class="quiz-bar" id="quizBar">
+    <span id="quizText"></span>
+    <span class="stars" id="stars"></span>
+    <button class="icon-btn" id="quizReplay" aria-label="再聽一次">🔊</button>
+  </div>
+  <div class="stage-wrap"><div class="stage" id="stage"></div></div>
+  <div class="pager">
+    <button class="icon-btn" id="prev" aria-label="上一頁">◀️</button>
+    <div class="dots" id="dots"></div>
+    <button class="icon-btn" id="next" aria-label="下一頁">▶️</button>
+  </div>
+</section>
+
+<!-- 家長設定 -->
+<div class="sheet" id="sheet">
+  <div class="panel">
+    <h2>👨‍👩‍👧 家長設定</h2>
+    <div class="row"><span>語速</span>
+      <div class="seg" id="rateSeg">
+        <button data-rate="0.7">慢</button><button data-rate="0.9">中</button><button data-rate="1.05">快</button>
+      </div>
+    </div>
+    <div class="row"><span>顯示文字標籤</span>
+      <div class="seg" id="tagSeg"><button data-tags="1">顯示</button><button data-tags="0">隱藏</button></div>
+    </div>
+    <div class="row"><span>中文語音</span><span id="voiceInfo" style="color:var(--muted)"></span></div>
+    <button class="close" id="sheetClose">完成</button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================
+ * 內容資料：之後可以抽成 JSON，或換成真實插圖 (img) 取代 emoji
+ * 每個項目：e=圖示, zh=中文, en=英文, say=點讀時說的句子, q=問答題(5-6歲用)
+ * 場景頁 (type:"scene") 的 x,y 是百分比座標
+ * ========================================================= */
+const AGES = [
+  { id: "baby", emo: "👶", age: "1–2 歲", color: "#ff9f7a",
+    desc: "大圖、單字、聲音<br>一頁 6 個，點了就有反應",
+    tip: "找找看", books: ["animals", "fruits", "vehicles"] },
+  { id: "kid", emo: "🧒", age: "3–4 歲", color: "#4fb3e8",
+    desc: "生活場景、中英雙語<br>認識身邊的人事物",
+    tip: "找找看", books: ["street", "park", "kitchen", "animals"] },
+  { id: "big", emo: "🧑‍🎓", age: "5–6 歲", color: "#43b96b",
+    desc: "情境問答、猜謎<br>培養觀察與理解",
+    tip: "猜猜看", books: ["street", "park", "kitchen", "safety"] },
+];
+
+const BOOKS = {
+  animals: { name: "可愛動物", en: "Animals", cover: "🐶", color: "#ffe2b8", pages: [
+    { title: "農場動物", type: "grid", bg: "linear-gradient(#bfe6ff, #d8f5c6)", items: [
+      { e: "🐶", zh: "狗狗", en: "dog", say: "狗狗，汪汪汪！", q: "誰會汪汪叫，幫忙看家？" },
+      { e: "🐱", zh: "貓咪", en: "cat", say: "貓咪，喵～喵～", q: "誰會喵喵叫，喜歡抓老鼠？" },
+      { e: "🐮", zh: "乳牛", en: "cow", say: "乳牛，哞～我會產牛奶。", q: "誰給我們喝牛奶？" },
+      { e: "🐷", zh: "小豬", en: "pig", say: "小豬，齁齁齁！", q: "誰的鼻子圓圓的，會齁齁叫？" },
+      { e: "🦆", zh: "鴨子", en: "duck", say: "鴨子，呱呱呱！", q: "誰會游泳，呱呱叫？" },
+      { e: "🐔", zh: "公雞", en: "rooster", say: "公雞，咕咕咕～早上叫大家起床。", q: "誰早上叫大家起床？" },
+    ]},
+    { title: "森林動物", type: "grid", bg: "linear-gradient(#c9f0d0, #f6efc9)", items: [
+      { e: "🐘", zh: "大象", en: "elephant", say: "大象的鼻子長長的。", q: "誰的鼻子長長的？" },
+      { e: "🦁", zh: "獅子", en: "lion", say: "獅子，吼～我是萬獸之王。", q: "誰是萬獸之王？" },
+      { e: "🐵", zh: "猴子", en: "monkey", say: "猴子喜歡吃香蕉。", q: "誰最喜歡吃香蕉？" },
+      { e: "🐰", zh: "兔子", en: "rabbit", say: "兔子耳朵長長，跳跳跳。", q: "誰的耳朵長長，會跳來跳去？" },
+      { e: "🐻", zh: "熊", en: "bear", say: "大熊喜歡吃蜂蜜。", q: "誰最愛吃蜂蜜？" },
+      { e: "🦒", zh: "長頸鹿", en: "giraffe", say: "長頸鹿的脖子好長。", q: "誰的脖子最長？" },
+    ]},
+  ]},
+  fruits: { name: "好吃水果", en: "Fruits", cover: "🍎", color: "#ffd3d3", pages: [
+    { title: "水果", type: "grid", bg: "linear-gradient(#fff0d6, #ffe0e0)", items: [
+      { e: "🍎", zh: "蘋果", en: "apple", say: "紅紅的蘋果。", q: "紅紅圓圓的是哪個水果？" },
+      { e: "🍌", zh: "香蕉", en: "banana", say: "黃色的香蕉，彎彎的。", q: "黃黃彎彎的是什麼？" },
+      { e: "🍇", zh: "葡萄", en: "grapes", say: "紫色的葡萄，一串一串。", q: "一串一串紫色的是什麼？" },
+      { e: "🍓", zh: "草莓", en: "strawberry", say: "草莓酸酸甜甜。", q: "紅紅的、身上有小點點的是什麼？" },
+      { e: "🍉", zh: "西瓜", en: "watermelon", say: "夏天吃西瓜，好涼快！", q: "外面綠綠、裡面紅紅的是什麼？" },
+      { e: "🍊", zh: "橘子", en: "orange", say: "橘子要剝皮才能吃。", q: "要剝皮的橘色水果是什麼？" },
+    ]},
+  ]},
+  vehicles: { name: "交通工具", en: "Vehicles", cover: "🚗", color: "#d3e9ff", pages: [
+    { title: "車車", type: "grid", bg: "linear-gradient(#cfeaff, #e8e8e8)", items: [
+      { e: "🚗", zh: "汽車", en: "car", say: "汽車，叭叭！", q: "爸爸媽媽開的是什麼車？" },
+      { e: "🚌", zh: "公車", en: "bus", say: "公車可以載很多人。", q: "哪一台車可以載很多人？" },
+      { e: "🚒", zh: "消防車", en: "fire truck", say: "消防車，喔咿喔咿，去救火！", q: "哪一台車會去救火？" },
+      { e: "🚓", zh: "警車", en: "police car", say: "警車保護大家的安全。", q: "警察叔叔開什麼車？" },
+      { e: "✈️", zh: "飛機", en: "airplane", say: "飛機在天空飛。", q: "誰在天空飛？" },
+      { e: "🚂", zh: "火車", en: "train", say: "火車，嘟嘟～", q: "誰在鐵軌上跑？" },
+    ]},
+  ]},
+  street: { name: "熱鬧街道", en: "Street", cover: "🚦", color: "#e1e1e1", pages: [
+    { title: "街道", type: "scene", bg: "linear-gradient(#bfe6ff 0 45%, #9fd98a 45% 55%, #8f959c 55% 100%)", items: [
+      { e: "🏥", zh: "醫院", en: "hospital", say: "生病了要去醫院看醫生。", q: "生病的時候要去哪裡？", x: 15, y: 28, s: 13 },
+      { e: "🏫", zh: "學校", en: "school", say: "小朋友去學校上課。", q: "小朋友在哪裡上課？", x: 48, y: 28, s: 13 },
+      { e: "🏪", zh: "便利商店", en: "store", say: "便利商店可以買東西。", q: "要買飲料可以去哪裡？", x: 82, y: 28, s: 13 },
+      { e: "🚦", zh: "紅綠燈", en: "traffic light", say: "紅燈停，綠燈行。", q: "哪一個告訴我們什麼時候可以過馬路？", x: 32, y: 52, s: 9 },
+      { e: "🚒", zh: "消防車", en: "fire truck", say: "消防車要去救火，喔咿喔咿！", q: "哪一台車會噴水救火？", x: 20, y: 75, s: 13 },
+      { e: "🚌", zh: "公車", en: "bus", say: "公車停在公車站，大家排隊上車。", q: "哪一台車要排隊上車？", x: 52, y: 70, s: 13 },
+      { e: "🚓", zh: "警車", en: "police car", say: "警車在巡邏，保護大家。", q: "哪一台車在巡邏保護大家？", x: 82, y: 78, s: 11 },
+      { e: "🚲", zh: "腳踏車", en: "bicycle", say: "騎腳踏車要戴安全帽。", q: "哪一個要用腳踩才會前進？", x: 66, y: 90, s: 9 },
+    ]},
+  ]},
+  park: { name: "快樂公園", en: "Park", cover: "🌳", color: "#d6f5d0", pages: [
+    { title: "公園", type: "scene", bg: "linear-gradient(#aee0ff 0 40%, #8fd17a 40% 100%)", items: [
+      { e: "☀️", zh: "太陽", en: "sun", say: "太陽公公出來了，好溫暖。", q: "天上發光發熱的是什麼？", x: 85, y: 14, s: 11 },
+      { e: "☁️", zh: "雲", en: "cloud", say: "白白的雲在天上飄。", q: "天上白白軟軟的是什麼？", x: 30, y: 14, s: 11 },
+      { e: "🌳", zh: "大樹", en: "tree", say: "大樹下好涼快。", q: "哪裡可以乘涼？", x: 14, y: 50, s: 16 },
+      { e: "🛝", zh: "溜滑梯", en: "slide", say: "溜滑梯，咻～要排隊喔！", q: "咻一下滑下來的是什麼？", x: 50, y: 52, s: 15 },
+      { e: "🐕", zh: "小狗", en: "puppy", say: "小狗在草地上跑來跑去。", q: "誰在草地上跑來跑去？", x: 80, y: 62, s: 11 },
+      { e: "🦋", zh: "蝴蝶", en: "butterfly", say: "蝴蝶在花上飛。", q: "誰有漂亮的翅膀在花上飛？", x: 66, y: 38, s: 8 },
+      { e: "🌷", zh: "花", en: "flower", say: "花香香的，不能亂摘喔。", q: "香香的、不能亂摘的是什麼？", x: 34, y: 84, s: 9 },
+      { e: "⚽", zh: "足球", en: "ball", say: "一起來踢球！", q: "可以用腳踢的是什麼？", x: 62, y: 84, s: 9 },
+    ]},
+  ]},
+  kitchen: { name: "我家廚房", en: "Kitchen", cover: "🍳", color: "#fff0c2", pages: [
+    { title: "廚房", type: "scene", bg: "linear-gradient(#fff3d9 0 62%, #e3b98c 62% 100%)", items: [
+      { e: "🧊", zh: "冰箱", en: "fridge", say: "冰箱讓食物保持新鮮。", q: "哪裡可以讓食物冰冰涼涼？", x: 12, y: 42, s: 16 },
+      { e: "🍳", zh: "平底鍋", en: "pan", say: "平底鍋可以煎蛋，很燙不能摸！", q: "煎蛋要用什麼？", x: 42, y: 52, s: 12 },
+      { e: "🔪", zh: "菜刀", en: "knife", say: "菜刀很利，小朋友不能拿。", q: "哪一個很危險，小朋友不能拿？", x: 64, y: 54, s: 9 },
+      { e: "🥛", zh: "牛奶", en: "milk", say: "喝牛奶長高高。", q: "喝了會長高高的是什麼？", x: 84, y: 50, s: 10 },
+      { e: "🍞", zh: "麵包", en: "bread", say: "早餐吃麵包。", q: "早餐可以吃什麼？", x: 30, y: 80, s: 10 },
+      { e: "🥄", zh: "湯匙", en: "spoon", say: "用湯匙喝湯。", q: "喝湯要用什麼？", x: 55, y: 82, s: 9 },
+      { e: "🍚", zh: "白飯", en: "rice", say: "白飯要吃光光。", q: "碗裡白白的是什麼？", x: 78, y: 82, s: 10 },
+    ]},
+  ]},
+  safety: { name: "安全小尖兵", en: "Safety", cover: "🦺", color: "#ffd9c7", pages: [
+    { title: "居家安全", type: "scene", bg: "linear-gradient(#ffeedd 0 60%, #d9c2a7 60% 100%)", items: [
+      { e: "🔌", zh: "插座", en: "socket", say: "插座有電，不能用手指去摸！", q: "哪一個有電，手指不能碰？", x: 14, y: 40, s: 10 },
+      { e: "🔥", zh: "火", en: "fire", say: "火很燙，看到火要告訴大人。", q: "很燙、看到要趕快告訴大人的是什麼？", x: 40, y: 45, s: 12 },
+      { e: "🧯", zh: "滅火器", en: "fire extinguisher", say: "滅火器可以把火噴熄。", q: "哪一個可以把火噴熄？", x: 62, y: 45, s: 11 },
+      { e: "💊", zh: "藥", en: "medicine", say: "藥不是糖果，不能自己吃。", q: "哪一個不是糖果，不能自己吃？", x: 86, y: 42, s: 9 },
+      { e: "☎️", zh: "電話", en: "phone", say: "有危險要打 119 或 110。", q: "有危險時要用什麼打 119？", x: 24, y: 80, s: 11 },
+      { e: "🔦", zh: "手電筒", en: "flashlight", say: "停電的時候可以用手電筒。", q: "停電時要用什麼照亮？", x: 52, y: 82, s: 10 },
+      { e: "🩹", zh: "OK繃", en: "bandage", say: "受傷了可以貼 OK 繃。", q: "受傷流血時要貼什麼？", x: 78, y: 80, s: 9 },
+    ]},
+  ]},
+};
+
+/* ========================= state ========================= */
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("tb." + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("tb." + k, JSON.stringify(v)); } catch {} },
+};
+const S = {
+  age: null, book: null, page: 0,
+  lang: store.get("lang", "zh"),
+  mode: "read",
+  rate: store.get("rate", 0.9),
+  tags: store.get("tags", 1),
+  quiz: null,
+};
+const $ = (s) => document.querySelector(s);
+
+/* ========================= speech ========================= */
+let voices = [];
+function loadVoices() {
+  voices = speechSynthesis.getVoices();
+  const zh = pickVoice("zh");
+  $("#voiceInfo").textContent = zh ? zh.name : "使用系統預設";
+}
+if ("speechSynthesis" in window) { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
+function pickVoice(lang) {
+  if (lang === "zh") return voices.find(v => /zh[-_]TW/i.test(v.lang)) || voices.find(v => /^zh/i.test(v.lang));
+  return voices.find(v => /en[-_]US/i.test(v.lang)) || voices.find(v => /^en/i.test(v.lang));
+}
+function speak(parts) {
+  if (!("speechSynthesis" in window)) return;
+  speechSynthesis.cancel();
+  for (const [text, lang] of parts) {
+    if (!text) continue;
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = lang === "zh" ? "zh-TW" : "en-US";
+    const v = pickVoice(lang); if (v) u.voice = v;
+    u.rate = S.rate; u.pitch = 1.15;
+    speechSynthesis.speak(u);
+  }
+}
+function speakItem(it) {
+  const big = S.age === "big";
+  if (S.lang === "zh") speak([[it.say, "zh"]]);
+  else if (S.lang === "en") speak([[big ? `${it.en}. ${spell(it.en)}` : it.en, "en"]]);
+  else speak([[it.say, "zh"], [it.en, "en"]]);
+}
+const spell = (w) => w.replace(/\s/g, "").toUpperCase().split("").join(", ");
+
+/* ========================= navigation ========================= */
+function show(id) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.toggle("active", s.id === id));
+  if (id !== "reader") speechSynthesis?.cancel();
+}
+document.querySelectorAll("[data-back]").forEach(b => b.onclick = () => show(b.dataset.back));
+
+function renderHome() {
+  $("#ages").innerHTML = AGES.map(a =>
+    `<button class="age-card" data-age="${a.id}" style="background:${a.color}">
+       <span class="emo">${a.emo}</span><span class="age">${a.age}</span><span class="desc">${a.desc}</span>
+     </button>`).join("");
+  $("#ages").onclick = (e) => {
+    const c = e.target.closest("[data-age]"); if (!c) return;
+    S.age = c.dataset.age; store.set("age", S.age); renderShelf(); show("shelfScreen");
+  };
+}
+
+function renderShelf() {
+  const a = AGES.find(x => x.id === S.age);
+  $("#shelfTitle").textContent = `${a.emo} ${a.age}的書架`;
+  $("#shelf").innerHTML = a.books.map(id => {
+    const b = BOOKS[id];
+    const n = b.pages.reduce((s, p) => s + p.items.length, 0);
+    return `<button class="book" data-book="${id}">
+      <div class="cover" style="background:${b.color}">${b.cover}</div>
+      <div class="meta"><div class="name">${b.name}</div><div class="count">${b.en} · ${b.pages.length} 頁 · ${n} 個點讀</div></div>
+    </button>`;
+  }).join("");
+  $("#shelf").onclick = (e) => {
+    const c = e.target.closest("[data-book]"); if (!c) return;
+    S.book = c.dataset.book; S.page = 0;
+    S.mode = S.age === "big" ? "quiz" : "read"; // 5–6 歲預設進入問答
+    renderReader(); show("reader");
+  };
+}
+
+/* ========================= reader ========================= */
+function renderReader() {
+  const book = BOOKS[S.book], page = book.pages[S.page];
+  $("#pageTitle").textContent = `${book.name}・${page.title}`;
+  syncSeg("#langSeg", "lang", S.lang);
+  syncSeg("#modeSeg", "mode", S.mode);
+
+  const stage = $("#stage");
+  stage.className = "stage" + (page.type === "grid" ? " grid" : "") + (S.tags ? "" : " hide-tags");
+  stage.style.background = page.bg;
+  // 1–2 歲：圖更大，只顯示中文
+  const scale = S.age === "baby" ? 1.12 : 1;
+  stage.innerHTML = page.items.map((it, i) => {
+    const size = page.type === "grid" ? `${19 * scale}cqh` : `${it.s * 0.8}cqw`;
+    const en = S.lang !== "zh" ? `<span class="en">${it.en}</span>` : "";
+    const zh = S.lang !== "en" ? it.zh : "";
+    return `<button class="hot" data-i="${i}" style="left:${it.x}%;top:${it.y}%">
+      <span class="emo" style="font-size:${size}">${it.e}</span>
+      <span class="tag">${zh}${en}</span></button>`;
+  }).join("") + `<div class="bubble" id="bubble"></div>`;
+
+  $("#dots").innerHTML = book.pages.map((_, i) => `<span class="dot ${i === S.page ? "on" : ""}"></span>`).join("");
+  $("#prev").disabled = S.page === 0;
+  $("#next").disabled = S.page === book.pages.length - 1;
+
+  $("#reader").classList.toggle("quiz", S.mode === "quiz");
+  if (S.mode === "quiz") startQuiz(); else { $("#quizBar").classList.remove("show"); S.quiz = null; }
+}
+
+function syncSeg(sel, key, val) {
+  document.querySelectorAll(`${sel} button`).forEach(b => b.classList.toggle("on", String(b.dataset[key]) === String(val)));
+}
+
+$("#stage").addEventListener("pointerdown", (e) => {
+  const hot = e.target.closest(".hot"); if (!hot) return;
+  const it = BOOKS[S.book].pages[S.page].items[+hot.dataset.i];
+  if (S.mode === "quiz") return answer(hot, it);
+  replay(hot, "pop");
+  bubble(it.say, S.lang !== "zh" ? it.en : "");
+  speakItem(it);
+});
+
+function replay(el, cls) { el.classList.remove("pop", "wrong", "right"); void el.offsetWidth; el.classList.add(cls); }
+let bubbleTimer;
+function bubble(zh, en) {
+  const b = $("#bubble"); if (!b) return;
+  b.innerHTML = (S.lang === "en" ? "" : zh) + (en ? `<span class="en">${en}</span>` : "");
+  b.classList.add("show"); clearTimeout(bubbleTimer);
+  bubbleTimer = setTimeout(() => b.classList.remove("show"), 3000);
+}
+
+/* ========================= quiz ========================= */
+function startQuiz() {
+  const items = BOOKS[S.book].pages[S.page].items;
+  const order = items.map((_, i) => i).sort(() => Math.random() - .5);
+  S.quiz = { order, idx: 0, stars: 0, tries: 0 };
+  $("#quizBar").classList.add("show");
+  askQuestion();
+}
+function currentTarget() { const q = S.quiz; return BOOKS[S.book].pages[S.page].items[q.order[q.idx]]; }
+function questionText(it) {
+  // 1–4 歲：「XX 在哪裡？」；5–6 歲：用描述/猜謎
+  if (S.age === "big") return S.lang === "en" ? `Where is the ${it.en}?` : it.q;
+  return S.lang === "en" ? `Where is the ${it.en}?` : `${it.zh}在哪裡？`;
+}
+function askQuestion() {
+  const it = currentTarget(), q = S.quiz;
+  $("#quizText").textContent = questionText(it);
+  $("#stars").textContent = "⭐".repeat(q.stars) + "☆".repeat(q.order.length - q.stars);
+  speak([[questionText(it), S.lang === "en" ? "en" : "zh"]]);
+}
+$("#quizReplay").onclick = () => S.quiz && askQuestion();
+
+function answer(el, it) {
+  const target = currentTarget(), q = S.quiz;
+  if (it === target) {
+    replay(el, "right"); confetti(el);
+    if (q.tries === 0) q.stars++;
+    q.tries = 0;
+    const praise = ["答對了！好棒！", "你好厲害！", "沒錯！就是它！"][Math.floor(Math.random() * 3)];
+    bubble(`${praise} ${it.zh}`, S.lang !== "zh" ? it.en : "");
+    speak([[S.lang === "en" ? `Great! ${it.en}!` : `${praise}${it.say}`, S.lang === "en" ? "en" : "zh"]]);
+    q.idx++;
+    if (q.idx >= q.order.length) {
+      $("#stars").textContent = "⭐".repeat(q.stars) + "☆".repeat(q.order.length - q.stars);
+      setTimeout(() => {
+        $("#quizText").textContent = `全部完成！🎉 ${q.stars} 顆星`;
+        speak([[`全部完成了！你得到 ${q.stars} 顆星星！`, "zh"]]);
+        for (let i = 0; i < 4; i++) setTimeout(() => confetti(document.body), i * 250);
+      }, 2200);
+    } else setTimeout(askQuestion, 2600);
+  } else {
+    q.tries++;
+    replay(el, "wrong");
+    const hint = q.tries >= 2 ? `提示：它是${target.zh}` : "再找找看喔！";
+    bubble(`這是${it.zh}，${hint}`, "");
+    speak([[`這是${it.zh}，${hint}`, "zh"]]);
+    if (q.tries >= 2) { // 第二次答錯：讓正確答案跳一下
+      const ti = BOOKS[S.book].pages[S.page].items.indexOf(target);
+      replay($(`.hot[data-i="${ti}"]`), "pop");
+    }
+  }
+}
+
+function confetti(el) {
+  const r = el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  for (let i = 0; i < 12; i++) {
+    const c = document.createElement("div");
+    c.className = "confetti"; c.textContent = ["⭐", "✨", "🎉", "💖"][i % 4];
+    c.style.left = cx + "px"; c.style.top = cy + "px";
+    const a = Math.random() * Math.PI * 2, d = 120 + Math.random() * 160;
+    c.style.setProperty("--dx", Math.cos(a) * d + "px");
+    c.style.setProperty("--dy", Math.sin(a) * d + "px");
+    c.style.setProperty("--r", (Math.random() * 720 - 360) + "deg");
+    document.body.appendChild(c); setTimeout(() => c.remove(), 1200);
+  }
+}
+
+/* ========================= controls ========================= */
+$("#langSeg").onclick = (e) => { const b = e.target.closest("button"); if (!b) return; S.lang = b.dataset.lang; store.set("lang", S.lang); renderReader(); };
+$("#modeSeg").onclick = (e) => { const b = e.target.closest("button"); if (!b) return; S.mode = b.dataset.mode; renderReader(); };
+$("#prev").onclick = () => { if (S.page > 0) { S.page--; renderReader(); } };
+$("#next").onclick = () => { if (S.page < BOOKS[S.book].pages.length - 1) { S.page++; renderReader(); } };
+
+// 左右滑動翻頁
+let sx = null;
+$("#stage").addEventListener("touchstart", e => sx = e.touches[0].clientX, { passive: true });
+$("#stage").addEventListener("touchend", e => {
+  if (sx == null) return; const dx = e.changedTouches[0].clientX - sx; sx = null;
+  if (Math.abs(dx) > 80) (dx < 0 ? $("#next") : $("#prev")).click();
+});
+
+// 家長設定：長按 1.2 秒才開（避免小朋友誤觸）
+let holdT;
+const sb = $("#btnSettings");
+sb.addEventListener("pointerdown", () => { sb.classList.add("holding"); holdT = setTimeout(openSheet, 1200); });
+["pointerup", "pointerleave", "pointercancel"].forEach(ev => sb.addEventListener(ev, () => {
+  if (holdT && sb.classList.contains("holding") && !$("#sheet").classList.contains("show")) toast("家長請長按 ⚙️ 開啟設定");
+  clearTimeout(holdT); holdT = null; sb.classList.remove("holding");
+}));
+function openSheet() {
+  holdT = null; sb.classList.remove("holding");
+  syncSeg("#rateSeg", "rate", S.rate); syncSeg("#tagSeg", "tags", S.tags);
+  $("#sheet").classList.add("show");
+}
+$("#rateSeg").onclick = (e) => { const b = e.target.closest("button"); if (!b) return; S.rate = +b.dataset.rate; store.set("rate", S.rate); syncSeg("#rateSeg", "rate", S.rate); speak([["語速測試", "zh"]]); };
+$("#tagSeg").onclick = (e) => { const b = e.target.closest("button"); if (!b) return; S.tags = +b.dataset.tags; store.set("tags", S.tags); syncSeg("#tagSeg", "tags", S.tags); };
+$("#sheetClose").onclick = () => $("#sheet").classList.remove("show");
+
+let toastT;
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 1800); }
+
+// 防止 iOS 雙指縮放（雙擊放大由 CSS touch-action 處理）
+document.addEventListener("gesturestart", e => e.preventDefault());
+
+renderHome();
+</script>
+</body>
+</html>
